@@ -1,0 +1,291 @@
+library("lubridate")
+library("janitor")
+library("tidyverse")
+library("dplyr")
+library("readr")
+library("tidyr")
+library("ggplot2")
+library("stringr") 
+library("skimr")
+library("scales")
+library("data.table")
+library("plyr")
+library("viridis")
+
+setwd("C:/Users/admin/Documents/bikeshare")
+getwd()
+
+apr <- read.csv("202004-divvy-tripdata.csv")
+may <- read.csv("202005-divvy-tripdata.csv")
+jun <- read.csv("202006-divvy-tripdata.csv")
+jul <- read.csv("202007-divvy-tripdata.csv")
+aug <- read.csv("202008-divvy-tripdata.csv")
+sept <- read.csv("202009-divvy-tripdata.csv")
+oct <- read.csv("202010-divvy-tripdata.csv")
+nov <- read.csv("202011-divvy-tripdata.csv")
+dec <- read.csv("202012-divvy-tripdata.csv")
+jan <- read.csv("202101-divvy-tripdata.csv")
+feb <- read.csv("202102-divvy-tripdata.csv")
+mar <- read.csv("202103-divvy-tripdata.csv")
+
+trips <- rbind(apr,may,jun,jul,aug,sept,oct,nov,dec,jan,feb,mar)
+
+trips <- remove_empty(trips,which = c("cols"))
+trips <- remove_empty(trips,which = c("rows"))
+
+colnames(trips)[13] <- "user"
+colnames(trips)[2] <- "bike"
+colnames(trips)[3] <- "start_time"
+colnames(trips)[4] <- "end_time"
+colnames(trips)[5] <- "start_station"
+colnames(trips)[7] <- "end_station"
+
+trips = trips %>% 
+     mutate(
+         start_time = ymd_hms(as_datetime(start_time)),
+         end_time = ymd_hms(as_datetime(end_time))
+       )
+
+trips = trips %>%
+mutate(
+    bike = as_factor(bike),
+    user = as_factor(user)
+  )
+
+trips_1 = trips %>% 
+  mutate(
+    hours = hour(start_time),
+    weekday = lubridate::wday(start_time, label = T, abbr = F),
+    month = lubridate::month(start_time, label = T, abbr =F)
+  )
+
+trips_1 = trips_1 %>% 
+  mutate(
+    trip_time = difftime(end_time, start_time, units = "mins")
+  )
+
+
+glimpse(trips_1)
+colnames(trips_1)
+head(trips_1)
+colSums(is.na(trips_1))
+
+
+remove(trips)
+
+trips_1 <- distinct(trips_1)
+
+trips_2 = trips_1 %>% 
+  filter(between(trip_time, 1, 1440))
+
+# ANALYZE
+
+glimpse(trips_2)
+max(trips_2$trip_time)
+min(trips_2$trip_time)
+
+colSums(is.na(trips_2))
+
+skim_without_charts(trips_2)
+
+mean(trips_2$trip_time)
+median(trips_2$trip_time)
+
+aggregate(trips_2$trip_time ~ trips_2$user, FUN = mean)
+
+analyse_table <- trips_2 %>% 
+  select (ride_id,bike,start_station,end_station,user,trip_time,hours,weekday,month)
+
+glimpse(analyse_table)
+colnames(analyse_table)
+
+remove(trips_1)
+remove(trips_2)
+
+
+# VISUALIZE
+
+ride_hours = analyse_table %>% 
+  group_by(user, hours) %>% 
+  dplyr::summarise(no_of_rides = n(),
+    avg_trip = mean(trip_time),
+    total_trip = sum(trip_time)
+  )
+
+ride_hours %>% 
+  ggplot(aes(hours, no_of_rides, fill = user))+ 
+  geom_col(position = "dodge")+ 
+  scale_y_continuous()+ 
+  labs(
+    title = "Number of Trips per Hour",
+    subtitle = "Number of trips for every hour and by user",
+    caption = "Figure 1",
+    x = "hour of the day",
+    y = "number of rides",
+  )
+
+ride_hours %>% 
+  ggplot(aes(hours, avg_trip, fill = user))+ 
+  geom_col(position = "dodge")+ 
+  scale_y_continuous()+ 
+  labs(
+    title = "Average trips per Hour",
+    subtitle = "Average trip time for every hour and by user",
+    caption = "Figure 2",
+    x = "hour of the day",
+    y = "avg time of rides",
+  )
+
+
+ride_hours %>% 
+  ggplot(aes(hours, total_trip, fill = user))+ 
+  geom_col(position = "dodge")+ 
+  scale_y_continuous()+
+  labs(
+    title = "Total Trip Time per Hour",
+    subtitle = "Sum of trip time for every hour and by user",
+    caption = "Figure 3",
+    x = "hour of the day",
+    y = "total time of rides",
+  )
+
+
+ride_week = analyse_table %>% 
+  group_by(user, weekday) %>% 
+  dplyr::summarise(no_of_rides = n(),
+            avg_trip = mean(trip_time),
+            total_trip = sum(trip_time)
+            )
+
+
+ride_week %>% 
+  ggplot(aes(weekday, no_of_rides, fill=user)) + 
+  geom_col(position="dodge") + 
+  scale_y_continuous(labels=comma) + 
+  labs(
+    title = "No. of Rides by Days of a Week",
+    subtitle = "Number of rides on each weekday by users", 
+    caption = "Figure 4", 
+    x = "Days of a Week",
+    y = "Number of Rides"
+  )
+
+
+
+ride_week %>% 
+  ggplot(aes(weekday,avg_trip,fill=user)) + 
+  geom_col(position = "dodge") + 
+  scale_y_continuous(labels=comma) + 
+  labs(
+    title = "Average Trip Time by Day of a Week",
+    subtitle = "Average trip time for each day of a week by user",
+    caption = "Figure 5",
+    x = "Days of a Week",
+    y = "Average Trip Time"
+  )
+
+
+ride_week %>% 
+  ggplot(aes(weekday,total_trip,fill=user)) + 
+  geom_col(position = "dodge") + 
+  scale_y_continuous(labels=comma) + 
+  labs(
+    title = "Total Trip Time by Day of a Week",
+    subtitle = "Total trip time for each day of a week by user",
+    caption = "Figure 6",
+    x = "Days of a Week",
+    y = "Total Trip Time"
+  )
+
+
+ride_month = analyse_table %>% 
+  group_by(user, month) %>% 
+  dplyr::summarise(no_of_rides = n(),
+            avg_trip = mean(trip_time),
+            total_trip = sum(trip_time)
+  )
+
+ride_month %>% 
+  ggplot(aes(month, no_of_rides, fill=user)) + 
+  geom_col(position="dodge") + 
+  scale_y_continuous(labels=comma) + 
+  labs(
+    title = "No. of Rides by Month of the Year",
+    subtitle = "Number of rides on each month by users", 
+    caption = "Figure 7", 
+    x = "Month of the Year",
+    y = "Number of Rides"
+  )
+
+
+ride_month %>% 
+  ggplot(aes(month, avg_trip, fill=user)) + 
+  geom_col(position = "dodge") + 
+  scale_y_continuous(labels=comma) + 
+  labs(
+    title = "Average Trip Time by Month of a Year",
+    subtitle = "Average trip time for each month of the year by user",
+    caption = "Figure 8",
+    x = "Month of the Year",
+    y = "Average Trip Time"
+  )
+
+
+ride_month %>% 
+  ggplot(aes(month, total_trip, fill=user)) + 
+  geom_col(position = "dodge") + 
+  scale_y_continuous(labels=comma) +
+  labs(
+    title = "Total Trip Time by Month of a Year",
+    subtitle = "Total trip time for each month of a year by user", 
+    caption = "Figure 9",
+    x = "Month of a Year",
+    y = "Total Trip Time"
+  )
+
+ride_bike = analyse_table %>% 
+  group_by(user, bike) %>% 
+  dplyr::summarise(no_of_rides = n(),
+            avg_trip = mean(trip_time),
+            total_trip = sum(trip_time)
+  )
+
+
+ride_bike %>% 
+  ggplot(aes(bike, no_of_rides, fill = user))+
+  geom_col(position = "dodge")+
+  scale_y_continuous(labels = comma)+
+  labs(
+    title = "Number of Trips per Bike Type and Segregated by User",
+    subtitle = "Number of trips per bike type",
+    caption = "Fig 10",
+    x = "Types of Bikes",
+    y = "Number of Trips"
+  )
+
+
+ride_bike %>% 
+  ggplot(aes(bike, avg_trip, fill = user))+
+  geom_col(position = "dodge")+
+  scale_y_continuous(labels = comma)+
+  labs(
+    title = "Average Trip Time per Bike Type and Segregated by User",
+    subtitle = "Average trip time per bike type",
+    caption = "Fig 12",
+    x = "Type of Bikes",
+    y = "Avg Trip Time"
+  )
+
+
+
+ride_bike %>% 
+  ggplot(aes(bike, total_trip, fill = user))+
+  geom_col(position = "dodge")+
+  scale_y_continuous(labels = comma)+
+  labs(
+    title = "Total Trip Time per Bike Type and Segregated by User",
+    subtitle = "Total trip time per bike type",
+    caption = "Fig 13",
+    x = "Type of Bikes",
+    y = "Total Trip Time"
+  )
